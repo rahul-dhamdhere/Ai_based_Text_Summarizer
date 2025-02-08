@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Text Summarizer</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f0f2f5;
+            color: #333;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 2rem auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .header h1 {
+            color: #2c3e50;
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .input-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .input-card {
+            background: white;
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .input-card h2 {
+            margin-bottom: 1rem;
+            color: #3498db;
+        }
+
+        textarea {
+            width: 100%;
+            height: 300px;
+            padding: 1rem;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            resize: vertical;
+            font-size: 1rem;
+        }
+
+        .file-upload {
+            border: 2px dashed #3498db;
+            padding: 2rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .file-upload:hover {
+            background: #f8f9fa;
+            border-color: #2980b9;
+        }
+
+        #fileInput {
+            display: none;
+        }
+
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+
+        button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .summarize-btn {
+            background: #3498db;
+            color: white;
+        }
+
+        .summarize-btn:hover {
+            background: #2980b9;
+        }
+
+        .download-btn {
+            background: #27ae60;
+            color: white;
+        }
+
+        .download-btn:hover {
+            background: #219a52;
+        }
+
+        .summary-section {
+            background: white;
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .progress-bar {
+            height: 4px;
+            background: #3498db;
+            width: 0;
+            transition: width 0.3s ease;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            margin: 1rem 0;
+        }
+
+        .file-info {
+            margin-top: 1rem;
+            color: #666;
+        }
+
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+
+        .feature-card {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 8px;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .feature-card i {
+            font-size: 2rem;
+            color: #3498db;
+            margin-bottom: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Smart Text Summarizer</h1>
+            <p>Transform lengthy documents into concise summaries with AI-powered processing</p>
+        </div>
+
+        <div class="input-section">
+            <div class="input-card">
+                <h2><i class="fas fa-edit"></i> Paste Your Text</h2>
+                <textarea id="inputText" placeholder="Enter or paste your text here..."></textarea>
+            </div>
+
+            <div class="input-card">
+                <h2><i class="fas fa-file-upload"></i> Upload Document</h2>
+                <div class="file-upload" onclick="document.getElementById('fileInput').click()">
+                    <p>Click to upload PDF or DOCX file</p>
+                    <i class="fas fa-cloud-upload-alt fa-3x" style="color: #3498db; margin: 1rem 0;"></i>
+                    <div class="file-info" id="fileInfo"></div>
+                </div>
+                <input type="file" id="fileInput" accept=".pdf,.docx" hidden>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button class="summarize-btn" onclick="processContent()">
+                <i class="fas fa-magic"></i> Generate Summary
+            </button>
+            <select id="summaryLength" style="padding: 12px; border-radius: 5px;">
+                <option value="short">Short Summary</option>
+                <option value="medium" selected>Medium Summary</option>
+                <option value="detailed">Detailed Summary</option>
+            </select>
+        </div>
+
+        <div class="progress-bar"></div>
+        <div class="loading"><i class="fas fa-spinner fa-spin"></i> Processing...</div>
+
+        <div class="summary-section">
+            <h2 style="margin-bottom: 1rem;">Generated Summary</h2>
+            <div id="summaryOutput" style="min-height: 200px;"></div>
+        </div>
+
+        <div class="features">
+            <div class="feature-card">
+                <i class="fas fa-file-pdf"></i>
+                <h3>PDF Export</h3>
+                <p>Download your summary in PDF format with formatting preserved</p>
+            </div>
+            <div class="feature-card">
+                <i class="fas fa-file-word"></i>
+                <h3>DOCX Export</h3>
+                <p>Export summary as editable Word document with formatting options</p>
+            </div>
+            <div class="feature-card">
+                <i class="fas fa-chart-line"></i>
+                <h3>AI Analysis</h3>
+                <p>Advanced natural language processing for accurate summarization</p>
+            </div>
+        </div>
+
+        <div class="controls" style="margin-top: 2rem;">
+            <button class="download-btn" onclick="exportPDF()">
+                <i class="fas fa-file-pdf"></i> Export as PDF
+            </button>
+            <button class="download-btn" onclick="exportDOCX()">
+                <i class="fas fa-file-word"></i> Export as DOCX
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // File Upload Handling
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const validTypes = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+                if (!validTypes.includes(file.type)) {
+                    alert('Please upload a PDF or DOCX file');
+                    return;
+                }
+                
+                document.getElementById('fileInfo').innerHTML = `
+                    <strong>Selected File:</strong> ${file.name}<br>
+                    <strong>Size:</strong> ${(file.size/1024).toFixed(2)} KB
+                `;
+            }
+        });
+
+        // Simulate processing with progress bar
+        async function processContent() {
+        const text = document.getElementById('inputText').value.trim();
+        if (!text) {
+            alert('Please enter or paste some text to summarize');
+            return;
+        }
+
+        const summaryLength = document.getElementById('summaryLength').value;
+        const progressBar = document.querySelector('.progress-bar');
+        const loading = document.querySelector('.loading');
+        
+        loading.style.display = 'block';
+        progressBar.style.width = '50%';
+
+        try {
+            const response = await fetch('/process', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    text: text,
+                    summary_length: summaryLength
+                })
+            });
+
+            const result = await response.json();
+            showSummary(result);
+        } catch (error) {
+            console.error('Error:', error);
+            document.getElementById('summaryOutput').innerHTML = 'Error processing text. Please try again.';
+        }
+
+        progressBar.style.width = '100%';
+        loading.style.display = 'none';
+        setTimeout(() => {
+            progressBar.style.width = '0';
+        }, 1000);
+    }
+
+    function showSummary(result) {
+            const output = document.getElementById('summaryOutput');
+            output.innerHTML = `
+                <h3>Extractive Summary</h3>
+                <p>${result.extractive_summary}</p>
+                
+                <h3>Abstractive Report</h3>
+                <div>${result.abstractive_report}</div>
+                
+                ${result.mermaid_code ? `
+                    <h3>Concept Map</h3>
+                    <div class="mermaid">
+                        ${result.mermaid_code}
+                    </div>
+                ` : ''}
+            `;
+
+            // Re-render Mermaid diagrams
+            if (result.mermaid_code) {
+                mermaid.init();
+            }
+        }
+
+        function exportPDF() {
+            // Add PDF generation logic here
+            alert('PDF export functionality would be implemented here');
+        }
+
+        function exportDOCX() {
+            // Add DOCX generation logic here
+            alert('DOCX export functionality would be implemented here');
+        }
+    </script>
+</body>
+</html>
