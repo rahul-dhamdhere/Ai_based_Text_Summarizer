@@ -201,9 +201,9 @@
 
         <div class="progress-bar"></div>
         <div class="loading"><i class="fas fa-spinner fa-spin"></i> Processing...</div>
-
+        <h2 style="margin-bottom: 1rem;">Generated Summary</h2>
         <div class="summary-section">
-            <h2 style="margin-bottom: 1rem;">Generated Summary</h2>
+           
             <div id="summaryOutput" style="min-height: 200px;"></div>
         </div>
 
@@ -255,53 +255,51 @@
 
         // Simulate processing with progress bar
         async function processContent() {
-        const text = document.getElementById('inputText').value.trim();
-        if (!text) {
-            alert('Please enter or paste some text to summarize');
-            return;
+            const text = document.getElementById('inputText').value.trim();
+            if (!text) {
+                alert('Please enter or paste some text to summarize');
+                return;
+            }
+
+            const summaryLength = document.getElementById('summaryLength').value;
+            const progressBar = document.querySelector('.progress-bar');
+            const loading = document.querySelector('.loading');
+            
+            loading.style.display = 'block';
+            progressBar.style.width = '50%';
+
+            try {
+                const response = await fetch('/process', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        text: text,
+                        summary_length: summaryLength
+                    })
+                });
+
+                const result = await response.json();
+                showSummary(result);
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('summaryOutput').innerHTML = 'Error processing text. Please try again.';
+            }
+
+            progressBar.style.width = '100%';
+            loading.style.display = 'none';
+            setTimeout(() => {
+                progressBar.style.width = '0';
+            }, 1000);
         }
 
-        const summaryLength = document.getElementById('summaryLength').value;
-        const progressBar = document.querySelector('.progress-bar');
-        const loading = document.querySelector('.loading');
-        
-        loading.style.display = 'block';
-        progressBar.style.width = '50%';
-
-        try {
-            const response = await fetch('/process', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    text: text,
-                    summary_length: summaryLength
-                })
-            });
-
-            const result = await response.json();
-            showSummary(result);
-        } catch (error) {
-            console.error('Error:', error);
-            document.getElementById('summaryOutput').innerHTML = 'Error processing text. Please try again.';
-        }
-
-        progressBar.style.width = '100%';
-        loading.style.display = 'none';
-        setTimeout(() => {
-            progressBar.style.width = '0';
-        }, 1000);
-    }
-
-    function showSummary(result) {
+        function showSummary(result) {
             const output = document.getElementById('summaryOutput');
+            const cleanedAbstractiveReport = result.abstractive_report.replace(/<think>.*?<\/think>/gs, '');
             output.innerHTML = `
-                <h3>Extractive Summary</h3>
-                <p>${result.extractive_summary}</p>
                 
-                <h3>Abstractive Report</h3>
-                <div>${result.abstractive_report}</div>
+                <div>${cleanedAbstractiveReport}</div>
                 
                 ${result.mermaid_code ? `
                     <h3>Concept Map</h3>

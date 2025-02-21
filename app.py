@@ -1,20 +1,19 @@
-from flask import Flask, render_template, request, jsonify
 import nltk
 import numpy as np
 import networkx as nx
 import ollama
 from nltk.corpus import stopwords
 from nltk.tokenize import sent_tokenize, word_tokenize
-import os
+from flask import Flask, render_template, request, jsonify
 
 # Initialize Flask app
 app = Flask(__name__)
 
-# Download NLTK resources
+# Download required NLTK resources
 nltk.download('punkt')
 nltk.download('stopwords')
 
-# Copy the text processing functions from backend.py
+# TextRank-based Extractive Summarization Functions
 def sentence_similarity(sent1, sent2, stop_words=None):
     if stop_words is None:
         stop_words = set(stopwords.words('english'))
@@ -81,20 +80,13 @@ def summarize_text_rank_mixed(text, ratio=0.4, alpha=0.7, boost_keywords=None, b
 def generate_abstractive_content(text, summary_ratio=0.4):
     extractive_summary = summarize_text_rank_mixed(text, ratio=summary_ratio)
     
-    prompt = f"""Transform this technical summary into two formats:
-
-1. A concise, hierarchical report in note-making format using bullet points
-2. Mermaid code for a memory map (mind map) showing key concepts and relationships
+    prompt = f"""Transform this technical summary into a detailed summary.
 
 Summary:
 {extractive_summary}
 
-Format exactly like this:
-[Report in bullet point format...]
 
-```mermaid
-[Valid Mermaid diagram code...]
-```"""
+"""
     
     try:
         response = ollama.generate(
@@ -103,26 +95,14 @@ Format exactly like this:
             stream=False
         )['response']
         
-        if '```mermaid' in response:
-            report_part, mermaid_part = response.split('```mermaid', 1)
-            mermaid_code = mermaid_part.split('```')[0].strip()
-            print(f"extractive_summary : {extractive_summary}")
-            print(f"abstractive_report: {report_part}")
-            return {
-                'extractive_summary': extractive_summary,
-                'abstractive_report': report_part.strip(),
-                'mermaid_code': f"```mermaid\n{mermaid_code}\n```"
-            }
         return {
             'extractive_summary': extractive_summary,
-            'abstractive_report': response,
-            'mermaid_code': ""
+            'abstractive_report': response
         }
     except Exception as e:
         return {
             'extractive_summary': extractive_summary,
-            'abstractive_report': f"Error generating content: {str(e)}",
-            'mermaid_code': ""
+            'abstractive_report': f"Error generating content: {str(e)}"
         }
 
 # Routes
@@ -149,13 +129,4 @@ def process_text():
     return jsonify(result)
 
 if __name__ == '__main__':
-    # Ensure templates directory exists
-    if not os.path.exists('templates'):
-        os.makedirs('templates')
-    
-    # Move the HTML file to templates directory
-    with open('templates/index.html', 'w') as f:
-        with open('index.html', 'r') as source:
-            f.write(source.read())
-    
     app.run(debug=True)
