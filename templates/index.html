@@ -2,10 +2,14 @@
 <html lang="en">
 <head>
     <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Smart Text Summarizer</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
     <style>
         * {
             box-sizing: border-box;
@@ -122,6 +126,50 @@
             padding: 2rem;
             border-radius: 10px;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            width: 21cm;
+            min-height: 29.7cm;
+            margin: 0 auto;
+            padding: 2.54cm;
+            font-size: 12pt;
+            line-height: 1.5;
+            position: relative;
+            overflow: visible;
+            background-color: white !important;
+            color: black !important;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+            page-break-inside: avoid;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+        }
+
+        @media print {
+            .summary-section {
+                margin: 0;
+                padding: 20mm;
+                box-shadow: none;
+                background-color: white !important;
+                color: black !important;
+                break-inside: avoid;
+                width: 210mm;
+                min-height: 297mm;
+                padding: 20mm;
+                margin: 0;
+                background-color: white !important;
+                color: black !important;
+            }
+            
+            .summary-section * {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+
+            .mermaid {
+                break-inside: avoid;
+                page-break-inside: avoid;
+            }
         }
 
         .progress-bar {
@@ -175,6 +223,35 @@
         /* Ensure panel stays on top */
         #chatPanel {
             z-index: 1000;
+        }
+
+        #summaryOutput {
+            min-height: 200px;
+            line-height: 1.6;
+            font-size: 12pt;
+            color: #333;
+        }
+
+        #summaryOutput p {
+            margin-bottom: 1em;
+        }
+
+        #summaryOutput h1, 
+        #summaryOutput h2, 
+        #summaryOutput h3 {
+            color: #2c3e50;
+            margin: 1em 0 0.5em 0;
+        }
+
+        /* Add these styles for better Mermaid diagram rendering */
+        .mermaid {
+            margin: 2rem 0;
+            background: white;
+            padding: 1rem;
+            border-radius: 5px;
+            page-break-inside: avoid;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
         }
     </style>
 </head>
@@ -230,7 +307,7 @@
                 <h2 style="color: #2c3e50;"><i class="fas fa-comment-alt"></i> Chat Assistant</h2>
                 <button onclick="toggleChat()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer;">×</button>
             </div>
-            <div id="chatOutput" style="background: #f8f9fa; padding: 1rem; min-height: 60%; border-radius: 5px; margin-bottom: 1rem;"></div>
+            <div id="chatOutput" style="background: #f8f9fa; padding: 1rem; min-height: 77%; border-radius: 5px; margin-bottom: 1rem;"></div>
             <div style="display: flex; gap: 1rem;">
                 <input type="text" id="chatInput" placeholder="Ask about the summary or a topic..." style="flex: 1; padding: 10px; border-radius: 5px; border: 2px solid #ddd;">
                 <button class="summarize-btn" onclick="sendChatMessage()"><i class="fas fa-paper-plane"></i> Send</button>
@@ -267,18 +344,50 @@
 
     <script>
         // File Upload Handling
-        document.getElementById('fileInput').addEventListener('change', function(e) {
+        document.getElementById('fileInput').addEventListener('change', async function(e) {
             const file = e.target.files[0];
-            if (file) {
-                const validTypes = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
-                if (!validTypes.includes(file.type)) {
-                    alert('Please upload a PDF or DOCX file');
-                    return;
+            if (!file) return;
+
+            const validTypes = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+            if (!validTypes.includes(file.type)) {
+                alert('Please upload a PDF or DOCX file');
+                return;
+            }
+
+            document.getElementById('fileInfo').innerHTML = `
+                <strong>Selected File:</strong> ${file.name}<br>
+                <strong>Size:</strong> ${(file.size/1024).toFixed(2)} KB<br>
+                <span class="loading-text">Processing document...</span>
+            `;
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const response = await fetch('/extract-text', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to extract text');
                 }
-                
+
+                const result = await response.json();
+                if (result.text) {
+                    document.getElementById('inputText').value = result.text;
+                    document.getElementById('fileInfo').innerHTML = `
+                        <strong>Selected File:</strong> ${file.name}<br>
+                        <strong>Size:</strong> ${(file.size/1024).toFixed(2)} KB<br>
+                        <span style="color: green;">✓ Text extracted successfully</span>
+                    `;
+                }
+            } catch (error) {
+                console.error('Error:', error);
                 document.getElementById('fileInfo').innerHTML = `
                     <strong>Selected File:</strong> ${file.name}<br>
-                    <strong>Size:</strong> ${(file.size/1024).toFixed(2)} KB
+                    <strong>Size:</strong> ${(file.size/1024).toFixed(2)} KB<br>
+                    <span style="color: red;">Error processing document</span>
                 `;
             }
         });
@@ -345,9 +454,144 @@
             }
         }
 
-        function exportPDF() {
-            // Add PDF generation logic here
-            alert('PDF export functionality would be implemented here');
+        // Replace the existing exportPDF function
+
+        async function exportPDF() {
+            const summarySection = document.querySelector('.summary-section');
+            const button = document.querySelector('.download-btn');
+            
+            try {
+                // Show loading state
+                button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating PDF...';
+                button.disabled = true;
+
+                // Create a clean clone for PDF export
+                const clone = summarySection.cloneNode(true);
+                
+                // Apply PDF-specific styles
+                Object.assign(clone.style, {
+                    width: '210mm',
+                    minHeight: '297mm',
+                    padding: '20mm',
+                    position: 'absolute',
+                    left: '-9999px',
+                    backgroundColor: '#ffffff',
+                    color: '#000000',
+                    margin: '0',
+                    boxShadow: 'none',
+                    border: 'none'
+                });
+
+                // Clean up background colors
+                clone.querySelectorAll('*').forEach(el => {
+                    el.style.backgroundColor = 'transparent';
+                    if (el.classList.contains('mermaid')) {
+                        el.style.backgroundColor = '#ffffff';
+                    }
+                });
+
+                document.body.appendChild(clone);
+
+                // Generate canvas with better quality
+                const canvas = await html2canvas(clone, {
+                    scale: 2,
+                    useCORS: true,
+                    logging: false,
+                    allowTaint: true,
+                    backgroundColor: '#ffffff',
+                    removeContainer: true,
+                    foreignObjectRendering: true,
+                    scrollY: -window.scrollY,
+                    windowWidth: clone.offsetWidth,
+                    windowHeight: clone.offsetHeight
+                });
+
+                // Set up PDF dimensions
+                const imgWidth = 210; // A4 width in mm
+                const pageHeight = 297; // A4 height in mm
+                const imgHeight = canvas.height * imgWidth / canvas.width;
+                
+                // Create PDF with white background
+                const pdf = new jspdf.jsPDF({
+                    orientation: 'portrait',
+                    unit: 'mm',
+                    format: 'a4',
+                    putOnlyUsedFonts: true,
+                    compress: true
+                });
+
+                // Add header
+                pdf.setFontSize(16);
+                pdf.setTextColor(44, 62, 80);
+                pdf.text('Summary Report', pdf.internal.pageSize.getWidth() / 2, 15, { align: 'center' });
+                
+                // Add date
+                pdf.setFontSize(10);
+                pdf.setTextColor(102, 102, 102);
+                pdf.text(`Generated: ${new Date().toLocaleDateString()}`, 
+                        pdf.internal.pageSize.getWidth() - 20, 15, 
+                        { align: 'right' });
+
+                // Add white background
+                pdf.setFillColor(255, 255, 255);
+                pdf.rect(0, 0, pdf.internal.pageSize.getWidth(), pdf.internal.pageSize.getHeight(), 'F');
+
+                // Add content
+                pdf.addImage(canvas.toDataURL('image/jpeg', 1.0), 
+                            'JPEG', 
+                            0, 
+                            25, // Start after header
+                            imgWidth, 
+                            imgHeight,
+                            '', 
+                            'FAST');
+
+                // Handle multiple pages if needed
+                if (imgHeight > pageHeight - 25) { // Adjust for header
+                    let remainingHeight = imgHeight;
+                    let currentPage = 1;
+                    
+                    while (remainingHeight > 0) {
+                        remainingHeight -= (pageHeight - 25);
+                        if (remainingHeight > 0) {
+                            pdf.addPage();
+                            pdf.setFillColor(255, 255, 255);
+                            pdf.rect(0, 0, pdf.internal.pageSize.getWidth(), pdf.internal.pageSize.getHeight(), 'F');
+                            pdf.addImage(canvas.toDataURL('image/jpeg', 1.0), 
+                                        'JPEG', 
+                                        0, 
+                                        -(pageHeight - 25) * (currentPage - 1), 
+                                        imgWidth, 
+                                        imgHeight,
+                                        '', 
+                                        'FAST');
+                            currentPage++;
+                        }
+                    }
+                }
+
+                // Save PDF
+                pdf.save('summary-report.pdf');
+
+                // Cleanup
+                document.body.removeChild(clone);
+                
+                // Reset button
+                button.innerHTML = '<i class="fas fa-file-pdf"></i> Export as PDF';
+                button.disabled = false;
+
+            } catch (error) {
+                console.error('PDF generation error:', error);
+                alert('Error generating PDF. Please try again.');
+                button.innerHTML = '<i class="fas fa-file-pdf"></i> Export as PDF';
+                button.disabled = false;
+                
+                // Cleanup on error
+                const clone = document.querySelector('.summary-section[style*="position: absolute"]');
+                if (clone) {
+                    document.body.removeChild(clone);
+                }
+            }
         }
 
         /*function exportDOCX() {

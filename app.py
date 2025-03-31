@@ -5,6 +5,13 @@ import ollama
 from nltk.corpus import stopwords
 from nltk.tokenize import sent_tokenize, word_tokenize
 from flask import Flask, render_template, request, jsonify
+import PyPDF2
+from docx import Document
+import io
+import pytesseract
+from pdf2image import convert_from_bytes
+from PIL import Image
+import tempfile
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -216,6 +223,48 @@ def chat():
         chat_response = f"Error: {str(e)}"
     
     return jsonify({'response': chat_response})
+
+@app.route('/extract-text', methods=['POST'])
+def extract_text():
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file provided'}), 400
+    
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'error': 'No file selected'}), 400
+
+    try:
+        # Handle PDF files
+        if file.filename.endswith('.pdf'):
+            # Try normal extraction first
+            pdf_reader = PyPDF2.PdfReader(io.BytesIO(file.read()))
+            text = ''
+            for page in pdf_reader.pages:
+                page_text = page.extract_text()
+                text += page_text
+
+            # If normal extraction yields very little text, try OCR
+            if len(text.strip()) < 100:  # Arbitrary threshold
+                file.seek(0)  # Reset file pointer
+                # Convert PDF to images
+                images = convert_from_bytes(file.read())
+                text = ''
+                for image in images:
+                    # Perform OCR on each page
+                    text += pytesseract.image_to_string(image, lang='eng') + '\n'
+        
+        # Handle DOCX files
+        elif file.filename.endswith('.docx'):
+            doc = Document(io.BytesIO(file.read()))
+            text = '\n'.join([paragraph.text for paragraph in doc.paragraphs])
+        
+        else:
+            return jsonify({'error': 'Unsupported file format'}), 400
+
+        return jsonify({'text': text})
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True)
