@@ -1,101 +1,89 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Smart Text Summarizer - ChatGPT Style</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Text Summarizer</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
     <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: #f0f2f5;
-            margin: 0;
-            padding: 0;
-            display: flex;
-            flex-direction: column;
-            height: 100vh;
+            color: #333;
+            line-height: 1.6;
         }
 
-        .chat-container {
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            height: 100%;
-            max-width: 800px;
-            margin: 0 auto;
-            background: white;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            border-radius: 10px;
-            overflow: hidden;
+        .container {
+            max-width: 1200px;
+            margin: 2rem auto;
+            padding: 20px;
         }
 
-        .chat-header {
-            background: #3498db;
-            color: white;
-            padding: 1rem;
+        .header {
             text-align: center;
-            font-size: 1.5rem;
-            font-weight: bold;
+            margin-bottom: 2rem;
         }
 
-        .chat-messages {
-            flex: 1;
-            padding: 1rem;
-            overflow-y: auto;
-            background: #f8f9fa;
-        }
-
-        .chat-messages p {
-            margin: 0.5rem 0;
-        }
-
-        .chat-messages .user-message {
-            text-align: right;
+        .header h1 {
             color: #2c3e50;
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
         }
 
-        .chat-messages .assistant-message {
-            text-align: left;
+        .input-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .input-card {
+            background: white;
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .input-card h2 {
+            margin-bottom: 1rem;
             color: #3498db;
         }
 
-        .chat-input {
-            display: flex;
+        textarea {
+            width: 100%;
+            height: 300px;
             padding: 1rem;
-            background: #fff;
-            border-top: 1px solid #ddd;
-        }
-
-        .chat-input input {
-            flex: 1;
-            padding: 0.75rem;
-            border: 1px solid #ddd;
+            border: 2px solid #ddd;
             border-radius: 5px;
+            resize: vertical;
             font-size: 1rem;
         }
 
-        .chat-input button {
-            margin-left: 1rem;
-            padding: 0.75rem 1.5rem;
-            background: #3498db;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 1rem;
-        }
-
-        .chat-input button:hover {
-            background: #2980b9;
-        }
-
-        .loading {
+        .file-upload {
+            border: 2px dashed #3498db;
+            padding: 2rem;
             text-align: center;
-            margin: 1rem 0;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .file-upload:hover {
+            background: #f8f9fa;
+            border-color: #2980b9;
+        }
+
+        #fileInput {
             display: none;
         }
 
@@ -103,42 +91,105 @@
             display: flex;
             justify-content: center;
             gap: 1rem;
-            margin: 1rem 0;
+            margin: 2rem 0;
+        }
+
+        button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .summarize-btn {
+            background: #3498db;
+            color: white;
+        }
+
+        .summarize-btn:hover {
+            background: #2980b9;
         }
 
         .download-btn {
             background: #27ae60;
             color: white;
-            padding: 0.75rem 1.5rem;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 1rem;
         }
 
         .download-btn:hover {
             background: #219a52;
         }
 
-        .upload-container {
+        .summary-section {
+            background: white;
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            width: 21cm;
+            min-height: 29.7cm;
+            margin: 0 auto;
+            padding: 2.54cm;
+            font-size: 12pt;
+            line-height: 1.5;
+            position: relative;
+            overflow: visible;
+            background-color: white !important;
+            color: black !important;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+            page-break-inside: avoid;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+        }
+
+        @media print {
+            .summary-section {
+                margin: 0;
+                padding: 20mm;
+                box-shadow: none;
+                background-color: white !important;
+                color: black !important;
+                break-inside: avoid;
+                width: 210mm;
+                min-height: 297mm;
+                padding: 20mm;
+                margin: 0;
+                background-color: white !important;
+                color: black !important;
+            }
+            
+            .summary-section * {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+
+            .mermaid {
+                break-inside: avoid;
+                page-break-inside: avoid;
+            }
+        }
+
+        .progress-bar {
+            height: 4px;
+            background: #3498db;
+            width: 0;
+            transition: width 0.3s ease;
+        }
+
+        .loading {
+            display: none;
             text-align: center;
             margin: 1rem 0;
         }
 
-        .upload-label {
-            display: inline-block;
-            background: #3498db;
-            color: white;
-            padding: 0.75rem 1.5rem;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 1rem;
+        .file-info {
+            margin-top: 1rem;
+            color: #666;
         }
 
-<<<<<<< HEAD
-        .upload-label:hover {
-            background: #2980b9;
-=======
         .features {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
@@ -158,29 +209,86 @@
             font-size: 2rem;
             color: #3498db;
             margin-bottom: 1rem;
->>>>>>> parent of 4e75cef (Update index.html)
+        }
+        /* Already in your CSS, just ensure these are present */
+        body {
+            overflow-x: hidden; /* Prevent horizontal scroll when panel opens */
+        }
+
+        /* Refine button hover effect */
+        #chatToggle:hover {
+            background: #2980b9;
+        }
+
+        /* Ensure panel stays on top */
+        #chatPanel {
+            z-index: 1000;
+        }
+
+        #summaryOutput {
+            min-height: 200px;
+            line-height: 1.6;
+            font-size: 12pt;
+            color: #333;
+        }
+
+        #summaryOutput p {
+            margin-bottom: 1em;
+        }
+
+        #summaryOutput h1, 
+        #summaryOutput h2, 
+        #summaryOutput h3 {
+            color: #2c3e50;
+            margin: 1em 0 0.5em 0;
+        }
+
+        /* Add these styles for better Mermaid diagram rendering */
+        .mermaid {
+            margin: 2rem 0;
+            background: white;
+            padding: 1rem;
+            border-radius: 5px;
+            page-break-inside: avoid;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
         }
     </style>
 </head>
 <body>
-    <div class="chat-container">
-        <div class="chat-header">
-            Smart Text Summarizer
+    <div class="container">
+        <div class="header">
+            <h1>Smart Text Summarizer</h1>
+            <p>Transform lengthy documents into concise summaries with AI-powered processing</p>
         </div>
-        <div class="upload-container">
-            <label for="fileUpload" class="upload-label">
-                <i class="fas fa-upload"></i> Upload File
-            </label>
-            <input type="file" id="fileUpload" accept=".txt,.pdf,.docx" style="display: none;" onchange="handleFileUpload(event)">
+
+        <div class="input-section">
+            <div class="input-card">
+                <h2><i class="fas fa-edit"></i> Paste Your Text</h2>
+                <textarea id="inputText" placeholder="Enter or paste your text here..."></textarea>
+            </div>
+
+            <div class="input-card">
+                <h2><i class="fas fa-file-upload"></i> Upload Document</h2>
+                <div class="file-upload" onclick="document.getElementById('fileInput').click()">
+                    <p>Click to upload PDF or DOCX file</p>
+                    <i class="fas fa-cloud-upload-alt fa-3x" style="color: #3498db; margin: 1rem 0;"></i>
+                    <div class="file-info" id="fileInfo"></div>
+                </div>
+                <input type="file" id="fileInput" accept=".pdf,.docx" hidden>
+            </div>
         </div>
-        <div class="chat-messages" id="chatMessages">
-            <p class="assistant-message"><strong>Assistant:</strong> Welcome! Paste your text or upload a document to get started.</p>
+
+        <div class="controls">
+            <button class="summarize-btn" onclick="processContent()">
+                <i class="fas fa-magic"></i> Generate Summary
+            </button>
+            <select id="summaryLength" style="padding: 12px; border-radius: 5px;">
+                <option value="short">Short Summary</option>
+                <option value="medium" selected>Medium Summary</option>
+                <option value="detailed">Detailed Summary</option>
+            </select>
         </div>
-<<<<<<< HEAD
-        <div class="chat-input">
-            <input type="text" id="chatInput" placeholder="Type your message here...">
-            <button onclick="sendChatMessage()">Send</button>
-=======
 
         <div class="progress-bar"></div>
         <div class="loading"><i class="fas fa-spinner fa-spin"></i> Processing...</div>
@@ -188,6 +296,22 @@
         <div class="summary-section">
            
             <div id="summaryOutput" style="min-height: 200px;"></div>
+        </div>
+
+        <button id="chatToggle" style="position: fixed; bottom: 20px; right: 20px; padding: 12px 24px; background: #3498db; color: white; border: none; border-radius: 50px; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
+            <i class="fas fa-comment-alt"></i> Chat
+        </button>
+        
+        <div id="chatPanel" style="position: fixed; top: 0; right: -400px; width: 400px; height: 100%; background: #fff; box-shadow: -2px 0 5px rgba(0,0,0,0.2); transition: right 0.3s ease; padding: 20px; overflow-y: auto;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <h2 style="color: #2c3e50;"><i class="fas fa-comment-alt"></i> Chat Assistant</h2>
+                <button onclick="toggleChat()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer;">×</button>
+            </div>
+            <div id="chatOutput" style="background: #f8f9fa; padding: 1rem; min-height: 77%; border-radius: 5px; margin-bottom: 1rem;"></div>
+            <div style="display: flex; gap: 1rem;">
+                <input type="text" id="chatInput" placeholder="Ask about the summary or a topic..." style="flex: 1; padding: 10px; border-radius: 5px; border: 2px solid #ddd;">
+                <button class="summarize-btn" onclick="sendChatMessage()"><i class="fas fa-paper-plane"></i> Send</button>
+            </div>
         </div>
 
         <div class="features">
@@ -215,104 +339,55 @@
             <!-- <button class="download-btn" onclick="exportDOCX()">
                 <i class="fas fa-file-word"></i> Export as DOCX
             </button> -->
->>>>>>> parent of 4e75cef (Update index.html)
         </div>
     </div>
 
-    <div class="controls">
-        <button class="download-btn" onclick="exportPDF()">
-            <i class="fas fa-file-pdf"></i> Export as PDF
-        </button>
-    </div>
-
     <script>
-<<<<<<< HEAD
-        async function sendChatMessage() {
-            const chatInput = document.getElementById('chatInput');
-            const message = chatInput.value.trim();
-            if (!message) return;
-
-            const chatMessages = document.getElementById('chatMessages');
-            chatMessages.innerHTML += `<p class="user-message"><strong>You:</strong> ${message}</p>`;
-            chatInput.value = '';
-
-            try {
-                const response = await fetch('/chat', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message })
-                });
-                const result = await response.json();
-                const cleanedResponse = result.response.replace(/<think>.*?<\/think>/gs, '');
-                chatMessages.innerHTML += `<p class="assistant-message"><strong>Assistant:</strong> ${cleanedResponse}</p>`;
-            } catch (error) {
-                chatMessages.innerHTML += `<p class="assistant-message"><strong>Assistant:</strong> Error: Could not get a response.</p>`;
-            }
-
-            chatMessages.scrollTop = chatMessages.scrollHeight;
-        }
-
-        async function exportPDF() {
-            const chatMessages = document.getElementById('chatMessages');
-            const button = document.querySelector('.download-btn');
-
-            try {
-                button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating PDF...';
-                button.disabled = true;
-
-                const canvas = await html2canvas(chatMessages, { scale: 2 });
-                const imgData = canvas.toDataURL('image/png');
-                const pdf = new jspdf.jsPDF('p', 'mm', 'a4');
-                const imgWidth = 210;
-                const imgHeight = (canvas.height * imgWidth) / canvas.width;
-
-                pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
-                pdf.save('chat-summary.pdf');
-
-                button.innerHTML = '<i class="fas fa-file-pdf"></i> Export as PDF';
-                button.disabled = false;
-            } catch (error) {
-                console.error('Error generating PDF:', error);
-                alert('Failed to generate PDF. Please try again.');
-                button.innerHTML = '<i class="fas fa-file-pdf"></i> Export as PDF';
-                button.disabled = false;
-            }
-        }
-
-        // Add this function to handle file uploads
-        function handleFileUpload(event) {
-            const file = event.target.files[0];
+        // File Upload Handling
+        document.getElementById('fileInput').addEventListener('change', async function(e) {
+            const file = e.target.files[0];
             if (!file) return;
 
-            const reader = new FileReader();
-            reader.onload = function (e) {
-                const content = e.target.result;
-                const chatMessages = document.getElementById('chatMessages');
-                chatMessages.innerHTML += `<p class="user-message"><strong>You uploaded:</strong> ${file.name}</p>`;
-                chatMessages.innerHTML += `<p class="assistant-message"><strong>File Content:</strong> ${content}</p>`;
-                chatMessages.scrollTop = chatMessages.scrollHeight;
-            };
-
-            if (file.type === "text/plain") {
-                reader.readAsText(file);
-            } else {
-                alert("Only text files are supported for now.");
+            const validTypes = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+            if (!validTypes.includes(file.type)) {
+                alert('Please upload a PDF or DOCX file');
+                return;
             }
-        }
-=======
-        // File Upload Handling
-        document.getElementById('fileInput').addEventListener('change', function(e) {
-            const file = e.target.files[0];
-            if (file) {
-                const validTypes = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
-                if (!validTypes.includes(file.type)) {
-                    alert('Please upload a PDF or DOCX file');
-                    return;
+
+            document.getElementById('fileInfo').innerHTML = `
+                <strong>Selected File:</strong> ${file.name}<br>
+                <strong>Size:</strong> ${(file.size/1024).toFixed(2)} KB<br>
+                <span class="loading-text">Processing document...</span>
+            `;
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const response = await fetch('/extract-text', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to extract text');
                 }
-                
+
+                const result = await response.json();
+                if (result.text) {
+                    document.getElementById('inputText').value = result.text;
+                    document.getElementById('fileInfo').innerHTML = `
+                        <strong>Selected File:</strong> ${file.name}<br>
+                        <strong>Size:</strong> ${(file.size/1024).toFixed(2)} KB<br>
+                        <span style="color: green;">✓ Text extracted successfully</span>
+                    `;
+                }
+            } catch (error) {
+                console.error('Error:', error);
                 document.getElementById('fileInfo').innerHTML = `
                     <strong>Selected File:</strong> ${file.name}<br>
-                    <strong>Size:</strong> ${(file.size/1024).toFixed(2)} KB
+                    <strong>Size:</strong> ${(file.size/1024).toFixed(2)} KB<br>
+                    <span style="color: red;">Error processing document</span>
                 `;
             }
         });
@@ -379,16 +454,189 @@
             }
         }
 
-        function exportPDF() {
-            // Add PDF generation logic here
-            alert('PDF export functionality would be implemented here');
+        // Replace the existing exportPDF function
+
+        async function exportPDF() {
+            const summarySection = document.querySelector('.summary-section');
+            const button = document.querySelector('.download-btn');
+            
+            try {
+                // Show loading state
+                button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating PDF...';
+                button.disabled = true;
+
+                // Create a clean clone for PDF export
+                const clone = summarySection.cloneNode(true);
+                
+                // Apply PDF-specific styles
+                Object.assign(clone.style, {
+                    width: '210mm',
+                    minHeight: '297mm',
+                    padding: '20mm',
+                    position: 'absolute',
+                    left: '-9999px',
+                    backgroundColor: '#ffffff',
+                    color: '#000000',
+                    margin: '0',
+                    boxShadow: 'none',
+                    border: 'none'
+                });
+
+                // Clean up background colors
+                clone.querySelectorAll('*').forEach(el => {
+                    el.style.backgroundColor = 'transparent';
+                    if (el.classList.contains('mermaid')) {
+                        el.style.backgroundColor = '#ffffff';
+                    }
+                });
+
+                document.body.appendChild(clone);
+
+                // Generate canvas with better quality
+                const canvas = await html2canvas(clone, {
+                    scale: 2,
+                    useCORS: true,
+                    logging: false,
+                    allowTaint: true,
+                    backgroundColor: '#ffffff',
+                    removeContainer: true,
+                    foreignObjectRendering: true,
+                    scrollY: -window.scrollY,
+                    windowWidth: clone.offsetWidth,
+                    windowHeight: clone.offsetHeight
+                });
+
+                // Set up PDF dimensions
+                const imgWidth = 210; // A4 width in mm
+                const pageHeight = 297; // A4 height in mm
+                const imgHeight = canvas.height * imgWidth / canvas.width;
+                
+                // Create PDF with white background
+                const pdf = new jspdf.jsPDF({
+                    orientation: 'portrait',
+                    unit: 'mm',
+                    format: 'a4',
+                    putOnlyUsedFonts: true,
+                    compress: true
+                });
+
+                // Add header
+                pdf.setFontSize(16);
+                pdf.setTextColor(44, 62, 80);
+                pdf.text('Summary Report', pdf.internal.pageSize.getWidth() / 2, 15, { align: 'center' });
+                
+                // Add date
+                pdf.setFontSize(10);
+                pdf.setTextColor(102, 102, 102);
+                pdf.text(`Generated: ${new Date().toLocaleDateString()}`, 
+                        pdf.internal.pageSize.getWidth() - 20, 15, 
+                        { align: 'right' });
+
+                // Add white background
+                pdf.setFillColor(255, 255, 255);
+                pdf.rect(0, 0, pdf.internal.pageSize.getWidth(), pdf.internal.pageSize.getHeight(), 'F');
+
+                // Add content
+                pdf.addImage(canvas.toDataURL('image/jpeg', 1.0), 
+                            'JPEG', 
+                            0, 
+                            25, // Start after header
+                            imgWidth, 
+                            imgHeight,
+                            '', 
+                            'FAST');
+
+                // Handle multiple pages if needed
+                if (imgHeight > pageHeight - 25) { // Adjust for header
+                    let remainingHeight = imgHeight;
+                    let currentPage = 1;
+                    
+                    while (remainingHeight > 0) {
+                        remainingHeight -= (pageHeight - 25);
+                        if (remainingHeight > 0) {
+                            pdf.addPage();
+                            pdf.setFillColor(255, 255, 255);
+                            pdf.rect(0, 0, pdf.internal.pageSize.getWidth(), pdf.internal.pageSize.getHeight(), 'F');
+                            pdf.addImage(canvas.toDataURL('image/jpeg', 1.0), 
+                                        'JPEG', 
+                                        0, 
+                                        -(pageHeight - 25) * (currentPage - 1), 
+                                        imgWidth, 
+                                        imgHeight,
+                                        '', 
+                                        'FAST');
+                            currentPage++;
+                        }
+                    }
+                }
+
+                // Save PDF
+                pdf.save('summary-report.pdf');
+
+                // Cleanup
+                document.body.removeChild(clone);
+                
+                // Reset button
+                button.innerHTML = '<i class="fas fa-file-pdf"></i> Export as PDF';
+                button.disabled = false;
+
+            } catch (error) {
+                console.error('PDF generation error:', error);
+                alert('Error generating PDF. Please try again.');
+                button.innerHTML = '<i class="fas fa-file-pdf"></i> Export as PDF';
+                button.disabled = false;
+                
+                // Cleanup on error
+                const clone = document.querySelector('.summary-section[style*="position: absolute"]');
+                if (clone) {
+                    document.body.removeChild(clone);
+                }
+            }
         }
 
         /*function exportDOCX() {
             // Add DOCX generation logic here
             alert('DOCX export functionality would be implemented here');
         }*/
->>>>>>> parent of 4e75cef (Update index.html)
+        // Add this at the top of your <script> section
+        function toggleChat() {
+            const panel = document.getElementById('chatPanel');
+            if (panel.style.right === '0px') {
+                panel.style.right = '-400px'; // Hide
+            } else {
+                panel.style.right = '0px'; // Show
+            }
+        }
+
+        // Update the button to trigger toggle
+        document.getElementById('chatToggle').addEventListener('click', toggleChat);
+
+        // Keep your existing sendChatMessage, just ensure it works with new IDs
+        async function sendChatMessage() {
+            const chatInput = document.getElementById('chatInput');
+            const message = chatInput.value.trim();
+            if (!message) return;
+
+            const chatOutput = document.getElementById('chatOutput');
+            chatOutput.innerHTML += `<p><strong>You:</strong> ${message}</p>`;
+
+            try {
+                const response = await fetch('/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: message })
+                });
+                const result = await response.json();
+                // Clean up <think> tags from chat response
+                const cleanedResponse = result.response.replace(/<think>.*?<\/think>/gs, '');
+                chatOutput.innerHTML += `<p><strong>Assistant:</strong> ${cleanedResponse}</p>`;
+            } catch (error) {
+                chatOutput.innerHTML += `<p><strong>Assistant:</strong> Error: Could not get a response.</p>`;
+            }
+
+            chatInput.value = '';
+            chatOutput.scrollTop = chatOutput.scrollHeight;
+        }
     </script>
 </body>
 </html>
