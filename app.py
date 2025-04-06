@@ -20,6 +20,7 @@ app = Flask(__name__)
 nltk.download('punkt')  # Fix here
 nltk.download('stopwords')
 nltk.download('averaged_perceptron_tagger')  # Extra fix if needed
+nltk.download('punkt_tab')
 
 from collections import defaultdict
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -100,10 +101,13 @@ chat_cache = {}  # Cache chat responses for optimization
 def generate_abstractive_content(text, summary_ratio=0.4):
     extractive_summary = summarize_text_rank_mixed(text, ratio=summary_ratio)
     
-    prompt = f"""Transform this extractive summary into a detailed summary. 
-    - Rephrase sentences naturally.
-    - Use clear, concise language.
-    - Preserve key facts and named entities.
+    prompt = f"""
+        You are a text summarization assistant. 
+        Your task is to transform the following extractive summary into a clear, concise, and readable summary while preserving key facts. 
+        - Do not add fictional or generic information.
+        - Only include information from the extractive summary.
+        - Use clear and professional language.
+        - Keep it concise.
 
     Extractive Summary:
     {extractive_summary}
@@ -141,74 +145,53 @@ def index():
 def process_text():
     data = request.get_json()
     text = data.get('text', '')
-    summary_length = data.get('summary_length', 'medium')
-    
-    # Adjust ratio based on summary length
-    ratio_map = {
-        'short': 0.2,
-        'medium': 0.4,
-        'detailed': 0.6
-    }
-    ratio = ratio_map.get(summary_length, 0.4)
-    
+
     # Generate summary
-    result = generate_abstractive_content(text, summary_ratio=ratio)
-    
-    # Store the summary (using a simple user_id for demo; replace with session in real app)
+    result = generate_abstractive_content(text, summary_ratio=0.4)
+
+    # Store the input text and summaries (using a simple user_id for demo; replace with session in real app)
     user_id = request.remote_addr  # Use IP as a basic identifier
-    summaries[user_id] = result
-    
+    summaries[user_id] = {
+        'input_text': text,
+        'extractive_summary': result['extractive_summary'],
+        'abstractive_report': result['abstractive_report']
+    }
+
     return jsonify(result)
 
 @app.route('/chat', methods=['POST'])
 def chat():
     data = request.get_json()
     user_id = request.remote_addr
-    user_message = data.get('message', '').lower().strip()
-    
+    user_message = data.get('message', '').strip()  # Keep original case for natural feel
+
     # Check cache first
     cache_key = f"{user_id}:{user_message}"
     if cache_key in chat_cache:
         return jsonify({'response': chat_cache[cache_key]})
-    
-    # Get previous summary
+
+    # Get previous summary and input text
     prev_summary = summaries.get(user_id, {'extractive_summary': '', 'abstractive_report': ''})
     extractive = prev_summary['extractive_summary']
     abstractive = prev_summary['abstractive_report']
-    
-    # Handle specific requests
-    if "shorter" in user_message:
-        # Instruct LLM to shorten the existing abstractive summary
-        prompt = f"""
-        You are a helpful assistant for a text summarization tool. The user’s current summary is:
-        - Abstractive Summary: {abstractive}
-        
-        The user asks: "{user_message}"
-        Shorten the existing abstractive summary even further. Keep key facts and entities intact.
-        Respond only with the shortened summary.
-        """
-    elif "info" in user_message or "tell me about" in user_message:
-        # Extract topic from message (simple keyword approach)
-        topic = user_message.replace("info about", "").replace("tell me about", "").strip()
-        prompt = f"""
-        You are a helpful assistant for a text summarization tool. The user’s summaries are:
-        - Extractive Summary: {extractive}
-        - Abstractive Summary: {abstractive}
-        
-        The user asks: "{user_message}"
-        Provide concise, relevant information about "{topic}". Use the summaries if relevant, otherwise provide general knowledge.
-        """
-    else:
-        # General handling with context
-        prompt = f"""
-        You are a helpful assistant for a text summarization tool. The user’s summaries are:
-        - Extractive Summary: {extractive}
-        - Abstractive Summary: {abstractive}
-        
-        The user asks: "{user_message}"
-        Respond naturally, modifying the summary if requested or providing useful info based on the summaries.
-        """
-    
+    input_text = prev_summary.get('input_text', '')
+
+    # Single, flexible prompt
+    prompt = f"""
+    You are a helpful assistant for a text summarization tool. The user has provided the following input and generated summaries:
+    - Original Input: {input_text}
+    - Extractive Summary: {extractive}
+    - Abstractive Summary genrated by llm using extracive summary: {abstractive}
+
+    The user asks: "{user_message}"
+
+    Interpret the user's request naturally and respond appropriately. Follow these guidelines:
+    - If they ask to modify the summary (e.g., "make it shorter," "simplify it", "describe more"), adjust the abstractive summary accordingly and return only the modified version.
+    - If they request information (e.g., "tell me about X," "what is Y"), provide concise, relevant info, using the input and summaries if applicable, or general knowledge if not.
+    - For other queries, respond naturally, leveraging the input and summaries as context where relevant.
+    - Keep responses clear, concise, and focused on the user's intent.
+    """
+
     try:
         response = ollama.generate(
             model='deepseek-r1:1.5b',
@@ -216,12 +199,15 @@ def chat():
             stream=False
         )
         chat_response = response.get('response', 'Error: No response from model.')
-        
+        # Clean <think> tags
+        import re
+        chat_response = re.sub(r'<think>.*?</think>', '', chat_response, flags=re.DOTALL)
+
         # Cache the response
         chat_cache[cache_key] = chat_response
     except Exception as e:
         chat_response = f"Error: {str(e)}"
-    
+
     return jsonify({'response': chat_response})
 
 @app.route('/extract-text', methods=['POST'])
