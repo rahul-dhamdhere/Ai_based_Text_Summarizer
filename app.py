@@ -12,9 +12,41 @@ import pytesseract
 from pdf2image import convert_from_bytes
 from PIL import Image
 import tempfile
+import uuid
+from collections import defaultdict
+import sqlite3
 
 # Initialize Flask app
 app = Flask(__name__)
+
+# Database file path
+DATABASE = 'chat_history.db'
+
+# Initialize the database
+def init_db():
+    with sqlite3.connect(DATABASE) as conn:
+        cursor = conn.cursor()
+        # Create Chat table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS Chat (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL
+            )
+        ''')
+        # Create Message table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS Message (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                chat_id TEXT NOT NULL,
+                role TEXT NOT NULL,
+                content TEXT NOT NULL,
+                FOREIGN KEY (chat_id) REFERENCES Chat (id)
+            )
+        ''')
+        conn.commit()
+
+# Call the function to initialize the database
+init_db()
 
 # Download required NLTK resources
 nltk.download('punkt')  # Fix here
@@ -22,7 +54,6 @@ nltk.download('stopwords')
 nltk.download('averaged_perceptron_tagger')  # Extra fix if needed
 nltk.download('punkt_tab')
 
-from collections import defaultdict
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
@@ -149,66 +180,168 @@ def process_text():
     # Generate summary
     result = generate_abstractive_content(text, summary_ratio=0.4)
 
-    # Store the input text and summaries (using a simple user_id for demo; replace with session in real app)
-    user_id = request.remote_addr  # Use IP as a basic identifier
+    user_id = request.remote_addr
+    chat_id = str(uuid.uuid4())
+
+    # Save this session to Chat + Message table
+    with sqlite3.connect(DATABASE) as conn:
+        cursor = conn.cursor()
+        cursor.execute('INSERT INTO Chat (id, user_id) VALUES (?, ?)', (chat_id, user_id))
+        cursor.execute('INSERT INTO Message (chat_id, role, content) VALUES (?, ?, ?)', (chat_id, 'user', text))
+        cursor.execute('INSERT INTO Message (chat_id, role, content) VALUES (?, ?, ?)', (chat_id, 'assistant', result['abstractive_report']))
+        conn.commit()
+
+    # Also save to summary cache
     summaries[user_id] = {
         'input_text': text,
         'extractive_summary': result['extractive_summary'],
         'abstractive_report': result['abstractive_report']
     }
 
-    return jsonify(result)
+    return jsonify({**result, 'chat_id': chat_id})
+
 
 @app.route('/chat', methods=['POST'])
 def chat():
     data = request.get_json()
     user_id = request.remote_addr
-    user_message = data.get('message', '').strip()  # Keep original case for natural feel
+    user_message = data.get('message', '').strip()
+    chat_id = data.get('chat_id', str(uuid.uuid4()))  # Generate a new chat_id if not provided
 
-    # Check cache first
-    cache_key = f"{user_id}:{user_message}"
-    if cache_key in chat_cache:
-        return jsonify({'response': chat_cache[cache_key]})
+    # Connect to the database
+    with sqlite3.connect(DATABASE) as conn:
+        cursor = conn.cursor()
 
-    # Get previous summary and input text
-    prev_summary = summaries.get(user_id, {'extractive_summary': '', 'abstractive_report': ''})
-    extractive = prev_summary['extractive_summary']
-    abstractive = prev_summary['abstractive_report']
-    input_text = prev_summary.get('input_text', '')
+        # Check if the chat exists
+        cursor.execute('SELECT id FROM Chat WHERE id = ?', (chat_id,))
+        chat = cursor.fetchone()
+        if not chat:
+            # Create a new chat
+            cursor.execute('INSERT INTO Chat (id, user_id) VALUES (?, ?)', (chat_id, user_id))
+            conn.commit()
 
-    # Single, flexible prompt
-    prompt = f"""
-    You are a helpful assistant for a text summarization tool. The user has provided the following input and generated summaries:
-    - Original Input: {input_text}
-    - Extractive Summary: {extractive}
-    - Abstractive Summary genrated by llm using extracive summary: {abstractive}
+        # Add user message to the Message table
+        cursor.execute('INSERT INTO Message (chat_id, role, content) VALUES (?, ?, ?)', (chat_id, 'user', user_message))
+        conn.commit()
 
-    The user asks: "{user_message}"
+        # Check cache first
+        cache_key = f"{user_id}:{user_message}"
+        if cache_key in chat_cache:
+            response = chat_cache[cache_key]
+        else:
+            # Get previous summary and input text
+            prev_summary = summaries.get(user_id, {'extractive_summary': '', 'abstractive_report': '', 'input_text': ''})
+            extractive = prev_summary['extractive_summary']
+            abstractive = prev_summary['abstractive_report']
+            input_text = prev_summary['input_text']
 
-    Interpret the user's request naturally and respond appropriately. Follow these guidelines:
-    - If they ask to modify the summary (e.g., "make it shorter," "simplify it", "describe more"), adjust the abstractive summary accordingly and return only the modified version.
-    - If they request information (e.g., "tell me about X," "what is Y"), provide concise, relevant info, using the input and summaries if applicable, or general knowledge if not.
-    - For other queries, respond naturally, leveraging the input and summaries as context where relevant.
-    - Keep responses clear, concise, and focused on the user's intent.
-    """
+            # Detect intent and construct the prompt
+            if "shorter" in user_message.lower() or "simplify" in user_message.lower():
+                # User wants a shorter or simpler summary
+                prompt = f"""
+                The user has requested a modification to the summary.
+                Original Abstractive Summary: {abstractive}
+                Modify the summary to make it shorter or simpler as requested:
+                """
+            elif "more details" in user_message.lower() or "expand" in user_message.lower():
+                # User wants a more detailed summary
+                prompt = f"""
+                The user has requested a more detailed summary.
+                Original Abstractive Summary: {abstractive}
+                Expand the summary to include more context, details, and insights based on the following:
+                - Original Input: {input_text}
+                - Extractive Summary: {extractive}
+                Use your knowledge to provide additional relevant information while maintaining clarity and accuracy.
+                """
+            elif "what is" in user_message.lower() or "tell me about" in user_message.lower():
+                # User is asking an informational question
+                prompt = f"""
+                The user has asked an informational question: "{user_message}"
+                Use the following context to answer the question concisely:
+                - Original Input: {input_text}
+                """
+            elif "why" in user_message.lower() or "how" in user_message.lower():
+                # User is asking a reasoning or explanation question
+                prompt = f"""
+                The user has asked a reasoning or explanation question: "{user_message}"
+                Use the following context to provide a clear and concise answer:
+                - Original Input: {input_text}
+                """
+            else:
+                # General query or unrecognized intent
+                prompt = f"""
+                You are a helpful assistant for a text summarization tool. The user has provided the following input and generated summaries:
+                - Original Input: {input_text}
+                - Extractive Summary: {extractive}
+                - Abstractive Summary: {abstractive}
 
-    try:
-        response = ollama.generate(
-            model='deepseek-r1:1.5b',
-            prompt=prompt,
-            stream=False
-        )
-        chat_response = response.get('response', 'Error: No response from model.')
-        # Clean <think> tags
-        import re
-        chat_response = re.sub(r'<think>.*?</think>', '', chat_response, flags=re.DOTALL)
+                The user asks: "{user_message}"
 
-        # Cache the response
-        chat_cache[cache_key] = chat_response
-    except Exception as e:
-        chat_response = f"Error: {str(e)}"
+                Interpret the user's request naturally and respond appropriately. Follow these guidelines:
+                - If they ask to modify the summary (e.g., "make it shorter," "simplify it", "describe more"), adjust the abstractive summary accordingly and return only the modified version.
+                - If they request information (e.g., "tell me about X," "what is Y"), provide concise, relevant info, using the input and summaries if applicable, or general knowledge if not.
+                - For other queries, respond naturally, leveraging the input and summaries as context where relevant.
+                - Keep responses clear, concise, and focused on the user's intent.
+                """
 
-    return jsonify({'response': chat_response})
+            # Generate response using the prompt
+            try:
+                response = ollama.generate(
+                    model='deepseek-r1:1.5b',
+                    prompt=prompt,
+                    stream=False
+                )
+                chat_response = response.get('response', 'Error: No response from model.')
+                # Clean <think> tags
+                import re
+                chat_response = re.sub(r'<think>.*?</think>', '', chat_response, flags=re.DOTALL)
+
+                # Cache the response
+                chat_cache[cache_key] = chat_response
+            except Exception as e:
+                chat_response = f"Error: {str(e)}"
+
+            response = chat_response
+
+        # Add assistant response to chat history
+        cursor.execute('INSERT INTO Message (chat_id, role, content) VALUES (?, ?, ?)', (chat_id, 'assistant', response))
+        conn.commit()
+
+    return jsonify({'response': response, 'chat_id': chat_id})
+
+@app.route('/chat-history', methods=['GET'])
+def get_chat_history():
+    user_id = request.remote_addr
+    with sqlite3.connect(DATABASE) as conn:
+        cursor = conn.cursor()
+        # Retrieve all chats for the user
+        cursor.execute('SELECT id FROM Chat WHERE user_id = ?', (user_id,))
+        chats = cursor.fetchall()
+
+        chat_history = []
+        for chat in chats:
+            chat_id = chat[0]
+            cursor.execute('SELECT role, content FROM Message WHERE chat_id = ?', (chat_id,))
+            messages = [{'role': row[0], 'content': row[1]} for row in cursor.fetchall()]
+            chat_history.append({'chat_id': chat_id, 'messages': messages})
+
+    return jsonify(chat_history)
+
+@app.route('/load-chat', methods=['POST'])
+def load_chat():
+    data = request.get_json()
+    chat_id = data.get('chat_id')
+
+    with sqlite3.connect(DATABASE) as conn:
+        cursor = conn.cursor()
+        # Retrieve messages for the given chat_id
+        cursor.execute('SELECT role, content FROM Message WHERE chat_id = ?', (chat_id,))
+        messages = [{'role': row[0], 'content': row[1]} for row in cursor.fetchall()]
+    
+    if not messages:
+        return jsonify({'error': 'Chat not found'}), 404
+
+    return jsonify({'chat_id': chat_id, 'messages': messages})
 
 @app.route('/extract-text', methods=['POST'])
 def extract_text():
